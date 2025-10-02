@@ -1,12 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'component/nav_footer.dart';
 import 'asset_details.dart';
+import 'providers/asset_provider.dart';
+import 'models/asset.dart';
 
-class AssetList extends StatelessWidget {
+class AssetList extends StatefulWidget {
   const AssetList({super.key});
 
   @override
+  State<AssetList> createState() => _AssetListState();
+}
+
+class _AssetListState extends State<AssetList> {
+  final TextEditingController _searchController = TextEditingController();
+  String _selectedFilter = 'All';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final assetProvider = Provider.of<AssetProvider>(context);
+    final assets = assetProvider.assets;
+
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
@@ -17,15 +37,9 @@ class AssetList extends StatelessWidget {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: Icon(Icons.search),
-            onPressed: () {
-              // Search functionality
-            },
-          ),
-          IconButton(
             icon: Icon(Icons.filter_list),
             onPressed: () {
-              // Filter functionality
+              _showFilterDialog(context, assetProvider);
             },
           ),
         ],
@@ -57,7 +71,7 @@ class AssetList extends StatelessWidget {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  "20 assets found",
+                  "${assets.length} assets found",
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.white70,
@@ -67,17 +81,61 @@ class AssetList extends StatelessWidget {
             ),
           ),
 
-          SizedBox(height: 16),
+          // Search Bar
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) {
+                assetProvider.searchAssets(value);
+              },
+              decoration: InputDecoration(
+                hintText: 'Search assets...',
+                prefixIcon: Icon(Icons.search, color: Colors.blue),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.blue, width: 2),
+                ),
+              ),
+            ),
+          ),
 
           // Asset List
           Expanded(
-            child: ListView.builder(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              itemCount: 20,
-              itemBuilder: (context, index) {
-                return _buildAssetCard(context, index);
-              },
-            ),
+            child: assets.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.inbox_outlined, size: 64, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text(
+                          "No assets found",
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: assets.length,
+                    itemBuilder: (context, index) {
+                      return _buildAssetCard(context, assets[index]);
+                    },
+                  ),
           ),
         ],
       ),
@@ -85,56 +143,88 @@ class AssetList extends StatelessWidget {
     );
   }
 
-  Widget _buildAssetCard(BuildContext context, int index) {
-    final List<Map<String, dynamic>> assetData = [
-      {
-        'name': 'Laptop - Dell XPS 15',
-        'id': 'AST-001',
-        'location': 'Office 101',
-        'status': 'Active',
-        'statusColor': Colors.green,
-        'icon': Icons.laptop,
-        'iconColor': Colors.blue,
-      },
-      {
-        'name': 'Projector - Epson EB-X41',
-        'id': 'AST-002',
-        'location': 'Conference Room A',
-        'status': 'In Use',
-        'statusColor': Colors.orange,
-        'icon': Icons.videocam,
-        'iconColor': Colors.purple,
-      },
-      {
-        'name': 'Desk Chair - ErgoMax',
-        'id': 'AST-003',
-        'location': 'Warehouse B',
-        'status': 'Available',
-        'statusColor': Colors.green,
-        'icon': Icons.chair,
-        'iconColor': Colors.orange,
-      },
-      {
-        'name': 'Monitor - LG 27" 4K',
-        'id': 'AST-004',
-        'location': 'Office 203',
-        'status': 'Active',
-        'statusColor': Colors.green,
-        'icon': Icons.monitor,
-        'iconColor': Colors.teal,
-      },
-      {
-        'name': 'Printer - HP LaserJet',
-        'id': 'AST-005',
-        'location': 'Print Room',
-        'status': 'Maintenance',
-        'statusColor': Colors.red,
-        'icon': Icons.print,
-        'iconColor': Colors.indigo,
-      },
-    ];
+  void _showFilterDialog(BuildContext context, AssetProvider provider) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Filter by Status"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildFilterOption('All', provider),
+            _buildFilterOption('Active', provider),
+            _buildFilterOption('Inactive', provider),
+            _buildFilterOption('In Use', provider),
+            _buildFilterOption('Maintenance', provider),
+            _buildFilterOption('Retired', provider),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              provider.clearFilters();
+              _searchController.clear();
+              Navigator.pop(context);
+            },
+            child: Text("Clear"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Close"),
+          ),
+        ],
+      ),
+    );
+  }
 
-    final asset = assetData[index % assetData.length];
+  Widget _buildFilterOption(String status, AssetProvider provider) {
+    return ListTile(
+      title: Text(status),
+      leading: Radio<String>(
+        value: status,
+        groupValue: _selectedFilter,
+        onChanged: (value) {
+          setState(() {
+            _selectedFilter = value!;
+          });
+          provider.filterByStatus(value!);
+        },
+      ),
+      onTap: () {
+        setState(() {
+          _selectedFilter = status;
+        });
+        provider.filterByStatus(status);
+      },
+    );
+  }
+
+  Widget _buildAssetCard(BuildContext context, Asset asset) {
+    final Map<String, IconData> categoryIcons = {
+      'Electronics': Icons.devices,
+      'Furniture': Icons.chair,
+      'Equipment': Icons.build,
+      'Vehicles': Icons.directions_car,
+    };
+
+    final Map<String, Color> categoryColors = {
+      'Electronics': Colors.blue,
+      'Furniture': Colors.orange,
+      'Equipment': Colors.purple,
+      'Vehicles': Colors.green,
+    };
+
+    final Map<String, Color> statusColors = {
+      'Active': Colors.green,
+      'Inactive': Colors.grey,
+      'In Use': Colors.orange,
+      'Maintenance': Colors.red,
+      'Retired': Colors.brown,
+    };
+
+    final icon = categoryIcons[asset.category] ?? Icons.inventory_2;
+    final iconColor = categoryColors[asset.category] ?? Colors.grey;
+    final statusColor = statusColors[asset.status] ?? Colors.grey;
 
     return Card(
       margin: EdgeInsets.only(bottom: 12),
@@ -146,7 +236,9 @@ class AssetList extends StatelessWidget {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const AssetDetails()),
+            MaterialPageRoute(
+              builder: (context) => AssetDetails(asset: asset),
+            ),
           );
         },
         borderRadius: BorderRadius.circular(16),
@@ -158,12 +250,12 @@ class AssetList extends StatelessWidget {
               Container(
                 padding: EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: (asset['iconColor'] as Color).withValues(alpha: 0.1),
+                  color: iconColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  asset['icon'] as IconData,
-                  color: asset['iconColor'] as Color,
+                  icon,
+                  color: iconColor,
                   size: 28,
                 ),
               ),
@@ -175,7 +267,7 @@ class AssetList extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      asset['name'] as String,
+                      asset.name,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -183,7 +275,7 @@ class AssetList extends StatelessWidget {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      'ID: ${asset['id']}',
+                      'ID: ${asset.assetId}',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade600,
@@ -195,7 +287,7 @@ class AssetList extends StatelessWidget {
                         Icon(Icons.location_on, size: 14, color: Colors.grey.shade600),
                         SizedBox(width: 4),
                         Text(
-                          asset['location'] as String,
+                          asset.location,
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade600,
@@ -211,17 +303,17 @@ class AssetList extends StatelessWidget {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: (asset['statusColor'] as Color).withValues(alpha: 0.1),
+                  color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: (asset['statusColor'] as Color).withValues(alpha: 0.3),
+                    color: statusColor.withValues(alpha: 0.3),
                     width: 1,
                   ),
                 ),
                 child: Text(
-                  asset['status'] as String,
+                  asset.status,
                   style: TextStyle(
-                    color: asset['statusColor'] as Color,
+                    color: statusColor,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),

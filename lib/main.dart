@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'asset_list.dart';
+import 'add_new_asset.dart';
+import 'qr_scanner_page.dart';
 import 'component/nav_footer.dart';
+import 'providers/asset_provider.dart';
 
 void main() {
   runApp(const MainApp());
@@ -11,7 +15,10 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(home: IndexPage(), debugShowCheckedModeBanner: false);
+    return ChangeNotifierProvider(
+      create: (context) => AssetProvider(),
+      child: MaterialApp(home: IndexPage(), debugShowCheckedModeBanner: false),
+    );
   }
 }
 
@@ -20,6 +27,9 @@ class IndexPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final assetProvider = Provider.of<AssetProvider>(context);
+    final recentAssets = assetProvider.recentAssets;
+
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
@@ -143,7 +153,10 @@ class IndexPage extends StatelessWidget {
                             ],
                           ),
                           onPressed: () {
-                            // QR scanning logic here
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const QRScannerPage()),
+                            );
                           },
                         ),
                       ),
@@ -196,7 +209,10 @@ class IndexPage extends StatelessWidget {
                       title: "Add Asset",
                       color: Colors.orange,
                       onTap: () {
-                        // Navigate to add asset
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const AddNewAsset()),
+                        );
                       },
                     ),
                   ),
@@ -223,36 +239,54 @@ class IndexPage extends StatelessWidget {
             // Recent Scan Items
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    _buildRecentScanItem(
-                      "Laptop - Dell XPS 15",
-                      "Scanned 2 hours ago",
-                      Icons.laptop,
-                      Colors.blue,
+              child: recentAssets.isEmpty
+                  ? Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(32.0),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Icon(Icons.inbox_outlined, size: 48, color: Colors.grey),
+                              SizedBox(height: 12),
+                              Text(
+                                "No recent scans",
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  : Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: recentAssets.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final asset = entry.value;
+                          return Column(
+                            children: [
+                              if (index > 0) Divider(height: 1),
+                              _buildRecentScanItem(
+                                asset.name,
+                                asset.location,
+                                _getIconForCategory(asset.category),
+                                _getColorForCategory(asset.category),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
                     ),
-                    Divider(height: 1),
-                    _buildRecentScanItem(
-                      "Projector - Epson EB-X41",
-                      "Scanned 5 hours ago",
-                      Icons.videocam,
-                      Colors.purple,
-                    ),
-                    Divider(height: 1),
-                    _buildRecentScanItem(
-                      "Desk Chair - ErgoMax",
-                      "Scanned yesterday",
-                      Icons.chair,
-                      Colors.orange,
-                    ),
-                  ],
-                ),
-              ),
             ),
 
             SizedBox(height: 100),
@@ -284,7 +318,7 @@ class IndexPage extends StatelessWidget {
               Container(
                 padding: EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: color, size: 32),
@@ -317,7 +351,7 @@ class IndexPage extends StatelessWidget {
       leading: Container(
         padding: EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: color, size: 24),
@@ -338,5 +372,35 @@ class IndexPage extends StatelessWidget {
       ),
       trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
     );
+  }
+
+  IconData _getIconForCategory(String category) {
+    switch (category) {
+      case 'Electronics':
+        return Icons.devices;
+      case 'Furniture':
+        return Icons.chair;
+      case 'Equipment':
+        return Icons.build;
+      case 'Vehicles':
+        return Icons.directions_car;
+      default:
+        return Icons.inventory_2;
+    }
+  }
+
+  Color _getColorForCategory(String category) {
+    switch (category) {
+      case 'Electronics':
+        return Colors.blue;
+      case 'Furniture':
+        return Colors.orange;
+      case 'Equipment':
+        return Colors.purple;
+      case 'Vehicles':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
   }
 }

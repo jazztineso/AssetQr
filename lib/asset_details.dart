@@ -1,12 +1,27 @@
 import 'package:flutter/material.dart';
 import './component/nav_footer.dart';
-import './main.dart';
+import './models/asset.dart';
+import 'package:intl/intl.dart';
 
 class AssetDetails extends StatelessWidget {
-  const AssetDetails({super.key});
+  final Asset asset;
+
+  const AssetDetails({super.key, required this.asset});
 
   @override
   Widget build(BuildContext context) {
+    final dateFormat = DateFormat('MMMM dd, yyyy');
+
+    final Map<String, Color> statusColors = {
+      'Active': Colors.green,
+      'Inactive': Colors.grey,
+      'In Use': Colors.orange,
+      'Maintenance': Colors.red,
+      'Retired': Colors.brown,
+    };
+
+    final statusColor = statusColors[asset.status] ?? Colors.grey;
+
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
@@ -16,10 +31,7 @@ class AssetDetails extends StatelessWidget {
         leading: IconButton(
           icon: Icon(Icons.arrow_back),
           onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const IndexPage()),
-            );
+            Navigator.pop(context);
           },
         ),
         title: Text("Asset Details"),
@@ -53,7 +65,7 @@ class AssetDetails extends StatelessWidget {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    "View complete asset details",
+                    "ID: ${asset.assetId}",
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.white70,
@@ -88,22 +100,29 @@ class AssetDetails extends StatelessWidget {
                                 _buildInfoRow(
                                   Icons.devices,
                                   "Asset Name",
-                                  "Model X123",
+                                  asset.name,
                                   Colors.blue,
                                 ),
                                 SizedBox(height: 16),
                                 _buildInfoRow(
                                   Icons.calendar_today,
                                   "Purchase Date",
-                                  "2025-01-15",
+                                  dateFormat.format(asset.purchaseDate),
                                   Colors.green,
                                 ),
                                 SizedBox(height: 16),
                                 _buildInfoRow(
                                   Icons.location_on,
-                                  "Current Location",
-                                  "Warehouse A",
+                                  "Location",
+                                  asset.location,
                                   Colors.orange,
+                                ),
+                                SizedBox(height: 16),
+                                _buildInfoRow(
+                                  Icons.category,
+                                  "Category",
+                                  asset.category,
+                                  Colors.purple,
                                 ),
                               ],
                             ),
@@ -114,17 +133,17 @@ class AssetDetails extends StatelessWidget {
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.green.shade50,
+                              color: statusColor.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: Colors.green.shade200,
+                                color: statusColor.withValues(alpha: 0.3),
                                 width: 1,
                               ),
                             ),
                             child: Text(
-                              "Active",
+                              asset.status,
                               style: TextStyle(
-                                color: Colors.green.shade700,
+                                color: statusColor,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
                               ),
@@ -140,118 +159,98 @@ class AssetDetails extends StatelessWidget {
 
             SizedBox(height: 24),
 
-            // Maintenance History Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Text(
-                "Maintenance History",
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade800,
-                ),
-              ),
-            ),
-            SizedBox(height: 12),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    children: [
-                      _buildMaintenanceRow(
-                        "Last Maintenance",
-                        "2024-12-01",
-                        "Completed",
-                        Colors.green,
-                      ),
-                      Divider(height: 32),
-                      _buildMaintenanceRow(
-                        "Next Maintenance",
-                        "2025-12-01",
-                        "Scheduled",
-                        Colors.orange,
-                      ),
-                    ],
+            // Maintenance History Section (if available)
+            if (asset.lastMaintenance != null || asset.nextMaintenance != null) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Text(
+                  "Maintenance History",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade800,
                   ),
                 ),
               ),
-            ),
+              SizedBox(height: 12),
 
-            SizedBox(height: 24),
-
-            // Asset History Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Text(
-                "Asset History",
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade800,
-                ),
-              ),
-            ),
-            SizedBox(height: 12),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Asset Purchased",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      children: [
+                        if (asset.lastMaintenance != null) ...[
+                          _buildMaintenanceRow(
+                            "Last Maintenance",
+                            dateFormat.format(asset.lastMaintenance!),
+                            "Completed",
+                            Colors.green,
                           ),
-                          Chip(
-                            label: Text(
-                              "Checked by John",
-                              style: TextStyle(fontSize: 12),
-                            ),
-                            backgroundColor: Colors.blue.shade50,
-                            padding: EdgeInsets.symmetric(horizontal: 8),
-                          ),
+                          if (asset.nextMaintenance != null) Divider(height: 32),
                         ],
-                      ),
-                      SizedBox(height: 12),
-                      Text(
-                        "The asset was purchased on 2025-01-15 and is currently located in Warehouse A. It has undergone regular maintenance and is in active status.",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
+                        if (asset.nextMaintenance != null)
+                          _buildMaintenanceRow(
+                            "Next Maintenance",
+                            dateFormat.format(asset.nextMaintenance!),
+                            "Scheduled",
+                            Colors.orange,
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
+              SizedBox(height: 24),
+            ],
+
+            // Notes Section (if available)
+            if (asset.notes != null && asset.notes!.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Text(
+                  "Notes",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+              ),
+              SizedBox(height: 12),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Text(
+                      asset.notes!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
 
             SizedBox(height: 100),
           ],
         ),
       ),
-      bottomNavigationBar: NavFooter(initialIndex: 3),
+      bottomNavigationBar: NavFooter(initialIndex: 1),
     );
   }
 
@@ -261,7 +260,7 @@ class AssetDetails extends StatelessWidget {
         Container(
           padding: EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(icon, color: color, size: 20),
@@ -322,10 +321,10 @@ class AssetDetails extends StatelessWidget {
             vertical: 8,
           ),
           decoration: BoxDecoration(
-            color: statusColor.withOpacity(0.1),
+            color: statusColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: statusColor.withOpacity(0.3),
+              color: statusColor.withValues(alpha: 0.3),
               width: 1,
             ),
           ),

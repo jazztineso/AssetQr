@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../asset_list.dart';
 import '../add_new_asset.dart';
-import '../asset_details.dart';
 
 class NavFooter extends StatefulWidget {
   final int initialIndex;
@@ -24,7 +23,7 @@ class _NavFooterState extends State<NavFooter> {
   @override
   Widget build(BuildContext context) {
     return BottomNavigationBar(
-      type: BottomNavigationBarType.fixed, // To show all labels comment here if u want to hide it
+      type: BottomNavigationBarType.fixed,
       currentIndex: _selectedIndex,
       selectedItemColor: Colors.blue,
       unselectedItemColor: Colors.grey,
@@ -39,12 +38,8 @@ class _NavFooterState extends State<NavFooter> {
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.add_box_outlined),
-          label: 'Add New Asset',
+          label: 'Add Asset',
         ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.add_circle_outline_sharp),
-          label: 'Asset Details',
-        )
       ],
       onTap: (index) {
         setState(() {
@@ -65,11 +60,6 @@ class _NavFooterState extends State<NavFooter> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const AddNewAsset()),
-          );
-        }else if (index==3){
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const AssetDetails()),
           );
         }
       },

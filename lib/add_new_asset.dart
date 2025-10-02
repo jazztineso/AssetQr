@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import './component/nav_footer.dart';
+import './models/asset.dart';
+import './providers/asset_provider.dart';
 
 class AddNewAsset extends StatefulWidget {
   const AddNewAsset({super.key});
@@ -13,15 +16,65 @@ class _AddNewAssetState extends State<AddNewAsset> {
   final _assetNameController = TextEditingController();
   final _assetIdController = TextEditingController();
   final _locationController = TextEditingController();
+  final _notesController = TextEditingController();
   String _selectedCategory = 'Electronics';
   String _selectedStatus = 'Active';
+  DateTime _selectedDate = DateTime.now();
 
   @override
   void dispose() {
     _assetNameController.dispose();
     _assetIdController.dispose();
     _locationController.dispose();
+    _notesController.dispose();
     super.dispose();
+  }
+
+  void _saveAsset() {
+    if (_formKey.currentState!.validate()) {
+      final assetProvider = Provider.of<AssetProvider>(context, listen: false);
+
+      final newAsset = Asset(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: _assetNameController.text.trim(),
+        assetId: _assetIdController.text.trim(),
+        category: _selectedCategory,
+        location: _locationController.text.trim(),
+        status: _selectedStatus,
+        purchaseDate: _selectedDate,
+        notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      );
+
+      assetProvider.addAsset(newAsset);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 12),
+              Text('Asset added successfully!'),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+
+      // Clear form
+      _assetNameController.clear();
+      _assetIdController.clear();
+      _locationController.clear();
+      _notesController.clear();
+      setState(() {
+        _selectedCategory = 'Electronics';
+        _selectedStatus = 'Active';
+        _selectedDate = DateTime.now();
+      });
+    }
   }
 
   @override
@@ -137,7 +190,7 @@ class _AddNewAssetState extends State<AddNewAsset> {
                       label: "Status",
                       value: _selectedStatus,
                       icon: Icons.check_circle,
-                      items: ['Active', 'Inactive', 'Maintenance', 'Retired'],
+                      items: ['Active', 'Inactive', 'In Use', 'Maintenance', 'Retired'],
                       onChanged: (value) {
                         setState(() {
                           _selectedStatus = value!;
@@ -164,12 +217,17 @@ class _AddNewAssetState extends State<AddNewAsset> {
                       ),
                       child: InkWell(
                         onTap: () async {
-                          await showDatePicker(
+                          final pickedDate = await showDatePicker(
                             context: context,
-                            initialDate: DateTime.now(),
+                            initialDate: _selectedDate,
                             firstDate: DateTime(2000),
                             lastDate: DateTime.now(),
                           );
+                          if (pickedDate != null) {
+                            setState(() {
+                              _selectedDate = pickedDate;
+                            });
+                          }
                         },
                         borderRadius: BorderRadius.circular(12),
                         child: Padding(
@@ -198,7 +256,7 @@ class _AddNewAssetState extends State<AddNewAsset> {
                                     ),
                                     SizedBox(height: 4),
                                     Text(
-                                      "Select date",
+                                      "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}",
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w500,
@@ -212,6 +270,17 @@ class _AddNewAssetState extends State<AddNewAsset> {
                           ),
                         ),
                       ),
+                    ),
+
+                    SizedBox(height: 16),
+
+                    // Notes field
+                    _buildTextField(
+                      controller: _notesController,
+                      label: "Notes (Optional)",
+                      hint: "Enter any additional notes",
+                      icon: Icons.notes,
+                      maxLines: 3,
                     ),
 
                     SizedBox(height: 32),
@@ -229,21 +298,7 @@ class _AddNewAssetState extends State<AddNewAsset> {
                           ),
                           elevation: 4,
                         ),
-                        onPressed: () {
-                          if (_formKey.currentState!.validate()) {
-                            // Save asset logic
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Asset added successfully!'),
-                                backgroundColor: Colors.green,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                            );
-                          }
-                        },
+                        onPressed: _saveAsset,
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -278,6 +333,7 @@ class _AddNewAssetState extends State<AddNewAsset> {
     required String label,
     required String hint,
     required IconData icon,
+    int maxLines = 1,
   }) {
     return Card(
       elevation: 2,
@@ -288,6 +344,7 @@ class _AddNewAssetState extends State<AddNewAsset> {
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
         child: TextFormField(
           controller: controller,
+          maxLines: maxLines,
           decoration: InputDecoration(
             labelText: label,
             hintText: hint,
@@ -296,7 +353,7 @@ class _AddNewAssetState extends State<AddNewAsset> {
             labelStyle: TextStyle(color: Colors.grey.shade600),
           ),
           validator: (value) {
-            if (value == null || value.isEmpty) {
+            if (!label.contains('Optional') && (value == null || value.isEmpty)) {
               return 'Please enter $label';
             }
             return null;
@@ -321,7 +378,7 @@ class _AddNewAssetState extends State<AddNewAsset> {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
         child: DropdownButtonFormField<String>(
-          value: value,
+          initialValue: value,
           decoration: InputDecoration(
             labelText: label,
             border: InputBorder.none,
