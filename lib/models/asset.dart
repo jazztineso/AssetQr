@@ -39,23 +39,54 @@ class Asset {
     };
   }
 
-  // Create from JSON
+  // Create from JSON (supports Laravel API structure)
   factory Asset.fromJson(Map<String, dynamic> json) {
+    print('Parsing Asset from JSON: $json');
+
+    // Helper function to get string value with multiple fallbacks
+    String getStringValue(List<String> keys) {
+      for (var key in keys) {
+        if (json[key] != null) {
+          return json[key].toString();
+        }
+      }
+      return '';
+    }
+
+    // Helper function to extract nested object name
+    String getNestedName(String key, {String defaultValue = ''}) {
+      if (json[key] != null && json[key] is Map) {
+        return json[key]['name']?.toString() ?? defaultValue;
+      }
+      return json[key]?.toString() ?? defaultValue;
+    }
+
+    // Helper function to parse dates
+    DateTime? parseDate(List<String> keys) {
+      for (var key in keys) {
+        final value = json[key];
+        if (value != null && value.toString().isNotEmpty) {
+          try {
+            return DateTime.parse(value.toString());
+          } catch (e) {
+            print('Error parsing date for $key: $e');
+          }
+        }
+      }
+      return null;
+    }
+
     return Asset(
-      id: json['id'],
-      name: json['name'],
-      assetId: json['assetId'],
-      category: json['category'],
-      location: json['location'],
-      status: json['status'],
-      purchaseDate: DateTime.parse(json['purchaseDate']),
-      lastMaintenance: json['lastMaintenance'] != null
-          ? DateTime.parse(json['lastMaintenance'])
-          : null,
-      nextMaintenance: json['nextMaintenance'] != null
-          ? DateTime.parse(json['nextMaintenance'])
-          : null,
-      notes: json['notes'],
+      id: getStringValue(['id']),
+      name: getStringValue(['assetName', 'name', 'asset_name']),
+      assetId: getStringValue(['propertyCode', 'assetId', 'asset_id', 'property_code']),
+      category: getNestedName('category', defaultValue: 'Unknown'),
+      location: getNestedName('department', defaultValue: 'Unknown'),
+      status: getNestedName('status', defaultValue: getNestedName('condition', defaultValue: 'Unknown')),
+      purchaseDate: parseDate(['purchaseDate', 'purchase_date', 'dateAccountable', 'date_accountable', 'created_at']) ?? DateTime.now(),
+      lastMaintenance: parseDate(['lastMaintenance', 'last_maintenance']),
+      nextMaintenance: parseDate(['nextMaintenance', 'next_maintenance']),
+      notes: (json['description'] ?? json['notes'])?.toString(),
     );
   }
 

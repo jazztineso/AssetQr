@@ -1,27 +1,64 @@
 import 'package:flutter/material.dart';
 import '../models/asset.dart';
+import '../database/database_helper.dart';
 
 class AssetProvider extends ChangeNotifier {
-  final List<Asset> _assets = [];
+  final DatabaseHelper _db = DatabaseHelper.instance;
+
+  List<Asset> _assets = [];
   List<Asset> _filteredAssets = [];
   String _searchQuery = '';
   String _filterStatus = 'All';
+  bool _isLoading = false;
 
-  List<Asset> get assets => _filteredAssets.isEmpty && _searchQuery.isEmpty && _filterStatus == 'All'
-      ? _assets
-      : _filteredAssets;
+  List<Asset> get assets {
+    // If no search or filter is active, return all assets
+    if (_searchQuery.isEmpty && _filterStatus == 'All') {
+      return _assets;
+    }
+    // Otherwise return filtered results
+    return _filteredAssets;
+  }
 
   List<Asset> get allAssets => _assets;
 
   List<Asset> get recentAssets => _assets.take(3).toList();
 
-  // Add sample data
+  bool get isLoading => _isLoading;
+
+  /// Initialize provider - Load data from SQLite
+  /// Call this when app starts
   AssetProvider() {
-    _addSampleData();
+    loadAssets();
   }
 
-  void _addSampleData() {
-    _assets.addAll([
+  /// Load all assets from SQLite database
+  Future<void> loadAssets() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      _assets = await _db.getAllAssets();
+
+      // If no assets exist, add sample data
+      if (_assets.isEmpty) {
+        await _addSampleData();
+      }
+
+      _filteredAssets = _assets;
+    } catch (e) {
+      print('Error loading assets: $e');
+      _assets = [];
+      _filteredAssets = [];
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  /// Add sample data to database (only on first run)
+  Future<void> _addSampleData() async {
+    final sampleAssets = [
       Asset(
         id: '1',
         name: 'Laptop - Dell XPS 15',
@@ -52,7 +89,7 @@ class AssetProvider extends ChangeNotifier {
         assetId: 'AST-003',
         category: 'Furniture',
         location: 'Warehouse B',
-        status: 'Available',
+        status: 'Active',
         purchaseDate: DateTime(2023, 5, 10),
         notes: 'Ergonomic office chair',
       ),
@@ -79,36 +116,68 @@ class AssetProvider extends ChangeNotifier {
         nextMaintenance: DateTime(2025, 3, 30),
         notes: 'Scheduled for maintenance',
       ),
-    ]);
-    _filteredAssets = _assets;
+    ];
+
+    for (var asset in sampleAssets) {
+      await _db.insertAsset(asset);
+      _assets.add(asset);
+    }
+
     notifyListeners();
   }
 
-  // Add new asset
-  void addAsset(Asset asset) {
-    _assets.insert(0, asset);
-    _applyFilters();
-    notifyListeners();
-  }
+  /// Add new asset (saves to SQLite)
+  Future<void> addAsset(Asset asset) async {
+    try {
+      // Save to database
+      await _db.insertAsset(asset);
 
-  // Update asset
-  void updateAsset(String id, Asset updatedAsset) {
-    final index = _assets.indexWhere((asset) => asset.id == id);
-    if (index != -1) {
-      _assets[index] = updatedAsset;
+      // Update in-memory list
+      _assets.insert(0, asset);
       _applyFilters();
       notifyListeners();
+    } catch (e) {
+      print('Error adding asset: $e');
+      rethrow;
     }
   }
 
-  // Delete asset
-  void deleteAsset(String id) {
-    _assets.removeWhere((asset) => asset.id == id);
-    _applyFilters();
-    notifyListeners();
+  /// Update existing asset (saves to SQLite)
+  Future<void> updateAsset(String id, Asset updatedAsset) async {
+    try {
+      // Update in database
+      await _db.updateAsset(updatedAsset);
+
+      // Update in-memory list
+      final index = _assets.indexWhere((asset) => asset.id == id);
+      if (index != -1) {
+        _assets[index] = updatedAsset;
+        _applyFilters();
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error updating asset: $e');
+      rethrow;
+    }
   }
 
-  // Get asset by ID
+  /// Delete asset (removes from SQLite)
+  Future<void> deleteAsset(String id) async {
+    try {
+      // Delete from database
+      await _db.deleteAsset(id);
+
+      // Remove from in-memory list
+      _assets.removeWhere((asset) => asset.id == id);
+      _applyFilters();
+      notifyListeners();
+    } catch (e) {
+      print('Error deleting asset: $e');
+      rethrow;
+    }
+  }
+
+  /// Get asset by ID (from memory, faster)
   Asset? getAssetById(String id) {
     try {
       return _assets.firstWhere((asset) => asset.id == id);
@@ -117,7 +186,7 @@ class AssetProvider extends ChangeNotifier {
     }
   }
 
-  // Get asset by asset ID (QR code)
+  /// Get asset by asset ID / QR code (from memory, faster)
   Asset? getAssetByAssetId(String assetId) {
     try {
       return _assets.firstWhere((asset) => asset.assetId == assetId);
@@ -126,21 +195,63 @@ class AssetProvider extends ChangeNotifier {
     }
   }
 
-  // Search assets
-  void searchAssets(String query) {
+  /// Search assets (uses SQLite for better performance)
+  Future<void> searchAssets(String query) async {
     _searchQuery = query.toLowerCase();
-    _applyFilters();
+
+    if (_searchQuery.isEmpty) {
+      _applyFilters();
+    } else {
+      try {
+        // Use database search for better performance with large datasets
+        final results = await _db.searchAssets(_searchQuery);
+
+        // Apply status filter on search results
+        if (_filterStatus != 'All') {
+          _filteredAssets = results.where((asset) => asset.status == _filterStatus).toList();
+        } else {
+          _filteredAssets = results;
+        }
+      } catch (e) {
+        print('Error searching assets: $e');
+        _applyFilters(); // Fallback to in-memory search
+      }
+    }
+
     notifyListeners();
   }
 
-  // Filter by status
-  void filterByStatus(String status) {
+  /// Filter by status
+  Future<void> filterByStatus(String status) async {
     _filterStatus = status;
-    _applyFilters();
+
+    if (status == 'All') {
+      _applyFilters();
+    } else {
+      try {
+        // Use database filter for better performance
+        final results = await _db.getAssetsByStatus(status);
+
+        // Apply search filter on status results
+        if (_searchQuery.isNotEmpty) {
+          _filteredAssets = results.where((asset) {
+            return asset.name.toLowerCase().contains(_searchQuery) ||
+                   asset.assetId.toLowerCase().contains(_searchQuery) ||
+                   asset.location.toLowerCase().contains(_searchQuery);
+          }).toList();
+        } else {
+          _filteredAssets = results;
+        }
+      } catch (e) {
+        print('Error filtering assets: $e');
+        _applyFilters(); // Fallback to in-memory filter
+      }
+    }
+
     notifyListeners();
   }
 
-  // Apply filters and search
+  /// Apply filters (in-memory, for backward compatibility)
   void _applyFilters() {
     _filteredAssets = _assets.where((asset) {
       final matchesSearch = _searchQuery.isEmpty ||
@@ -154,18 +265,46 @@ class AssetProvider extends ChangeNotifier {
     }).toList();
   }
 
-  // Get statistics
+  /// Get statistics
   int get totalAssets => _assets.length;
 
   int get activeAssets => _assets.where((a) => a.status == 'Active').length;
 
   int get maintenanceAssets => _assets.where((a) => a.status == 'Maintenance').length;
 
-  // Clear search and filters
+  /// Get asset count from database (for verification)
+  Future<int> getDatabaseAssetCount() async {
+    return await _db.getAssetCount();
+  }
+
+  /// Get asset count by status from database
+  Future<Map<String, int>> getAssetCountByStatus() async {
+    return await _db.getAssetCountByStatus();
+  }
+
+  /// Clear search and filters
   void clearFilters() {
     _searchQuery = '';
     _filterStatus = 'All';
     _filteredAssets = _assets;
     notifyListeners();
+  }
+
+  /// Refresh data from database (useful after external changes)
+  Future<void> refresh() async {
+    await loadAssets();
+  }
+
+  /// Clear all data (for testing only)
+  Future<void> clearAllAssets() async {
+    try {
+      await _db.deleteAllAssets();
+      _assets.clear();
+      _filteredAssets.clear();
+      notifyListeners();
+    } catch (e) {
+      print('Error clearing assets: $e');
+      rethrow;
+    }
   }
 }

@@ -5,8 +5,16 @@ import 'add_new_asset.dart';
 import 'qr_scanner_page.dart';
 import 'component/nav_footer.dart';
 import 'providers/asset_provider.dart';
+import 'database/database_helper.dart';
+import 'test_connection_page.dart';
 
-void main() {
+void main() async {
+  // Ensure Flutter bindings are initialized
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize database for desktop platforms
+  DatabaseHelper.initializeDatabaseFactory();
+
   runApp(const MainApp());
 }
 
@@ -217,6 +225,28 @@ class IndexPage extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+
+            SizedBox(height: 12),
+
+            // Test Connection Button
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: SizedBox(
+                width: double.infinity,
+                child: _buildActionCard(
+                  context,
+                  icon: Icons.wifi_tethering,
+                  title: "Test API Connection",
+                  color: Colors.purple,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const TestConnectionPage()),
+                    );
+                  },
+                ),
               ),
             ),
 

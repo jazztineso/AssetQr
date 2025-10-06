@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import 'providers/asset_provider.dart';
 import 'asset_details.dart';
+import 'services/api_service.dart';
+import 'models/asset.dart';
 
 class QRScannerPage extends StatefulWidget {
   const QRScannerPage({super.key});
@@ -31,23 +34,171 @@ class _QRScannerPageState extends State<QRScannerPage> {
       _isProcessing = true;
     });
 
-    final assetId = barcode.rawValue!;
+    final qrCode = barcode.rawValue!;
     final assetProvider = Provider.of<AssetProvider>(context, listen: false);
-    final asset = assetProvider.getAssetByAssetId(assetId);
 
     controller.stop();
 
-    if (asset != null) {
-      // Asset found
-      Navigator.pop(context);
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => AssetDetails(asset: asset),
+    // Extract asset_id or property_code from QR code if it's JSON
+    String searchValue = qrCode;
+
+    print('\n========== PROCESSING QR CODE ==========');
+    print('Raw QR Code: $qrCode');
+    print('QR Code Type: ${qrCode.runtimeType}');
+
+    try {
+      final qrData = jsonDecode(qrCode) as Map<String, dynamic>;
+      print('✓ QR code is valid JSON');
+      print('QR JSON data: $qrData');
+      print('Available keys: ${qrData.keys.toList()}');
+
+      // Laravel searches: asset_id, property_code, and qr_code_data
+      // Use property_code as it's more specific and unique
+      final propertyCode = qrData['property_code'] as String?;
+      final assetId = qrData['asset_id'];
+
+      print('property_code from QR: $propertyCode');
+      print('asset_id from QR: $assetId');
+
+      // Prioritize property_code as it's unique and more reliable
+      searchValue = propertyCode ??
+                   qrData['propertyCode'] as String? ??
+                   assetId?.toString() ??
+                   qrCode;
+
+      print('✓ Extracted search value: "$searchValue"');
+      print('This will be sent to Laravel as: /api/assetData?qr_code=$searchValue');
+    } catch (e, stackTrace) {
+      // QR code is not JSON, use as-is
+      print('✗ JSON parsing failed: $e');
+      print('Stack trace: $stackTrace');
+      print('Using raw QR code value: $qrCode');
+    }
+    print('========================================\n');
+
+    // Show what we extracted (for debugging)
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Extracted value: $searchValue'),
+        duration: Duration(seconds: 2),
+        backgroundColor: Colors.blue,
+      ),
+    );
+
+    await Future.delayed(Duration(seconds: 2));
+
+    // Show loading indicator
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+            SizedBox(width: 12),
+            Text('Fetching asset data from API...'),
+          ],
         ),
-      );
+        backgroundColor: Colors.blue,
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 30),
+      ),
+    );
+
+    // Fetch asset data from API using the extracted search value
+    final result = await ApiService.fetchAssetData(searchValue);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    print('\n========== QR SCANNER RESULT ==========');
+    print('Search value sent to API: $searchValue');
+    print('Result: $result');
+    print('Success: ${result['success']}');
+    print('Data: ${result['data']}');
+    print('Message: ${result['message']}');
+    print('======================================\n');
+
+    if (result['success'] == true && result['data'] != null) {
+      // Parse asset from result
+      final Asset fetchedAsset = Asset.fromJson(result['data']);
+
+      // Asset found from API, save it to database
+      try {
+        await assetProvider.addAsset(fetchedAsset);
+
+        if (!mounted) return;
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('Asset saved successfully!'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+
+        // Navigate to asset details page
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => AssetDetails(asset: fetchedAsset),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+
+        // Error saving to database
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('Error saving asset: $e'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+
+        await Future.delayed(Duration(seconds: 2));
+        controller.start();
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     } else {
-      // Asset not found
+      // Asset not found in API
+      if (!mounted) return;
+
+      final errorMessage = result['message'] ?? 'Asset not found in API: $qrCode';
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -55,7 +206,7 @@ class _QRScannerPageState extends State<QRScannerPage> {
               Icon(Icons.error_outline, color: Colors.white),
               SizedBox(width: 12),
               Expanded(
-                child: Text('Asset not found: $assetId'),
+                child: Text(errorMessage),
               ),
             ],
           ),
@@ -72,7 +223,7 @@ class _QRScannerPageState extends State<QRScannerPage> {
         ),
       );
 
-      await Future.delayed(Duration(seconds: 2));
+      await Future.delayed(Duration(seconds: 3));
       controller.start();
       setState(() {
         _isProcessing = false;

@@ -30,7 +30,7 @@ class _AddNewAssetState extends State<AddNewAsset> {
     super.dispose();
   }
 
-  void _saveAsset() {
+  void _saveAsset() async {
     if (_formKey.currentState!.validate()) {
       final assetProvider = Provider.of<AssetProvider>(context, listen: false);
 
@@ -45,35 +45,90 @@ class _AddNewAssetState extends State<AddNewAsset> {
         notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
       );
 
-      assetProvider.addAsset(newAsset);
-
+      // Show loading indicator
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
               SizedBox(width: 12),
-              Text('Asset added successfully!'),
+              Text('Saving asset...'),
             ],
           ),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
+          duration: Duration(seconds: 10),
         ),
       );
 
-      // Clear form
-      _assetNameController.clear();
-      _assetIdController.clear();
-      _locationController.clear();
-      _notesController.clear();
-      setState(() {
-        _selectedCategory = 'Electronics';
-        _selectedStatus = 'Active';
-        _selectedDate = DateTime.now();
-      });
+      try {
+        // Wait for asset to be saved to database
+        await assetProvider.addAsset(newAsset);
+
+        // Check if widget is still mounted
+        if (!mounted) return;
+
+        // Hide loading indicator
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Asset added successfully!'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+
+        // Clear form
+        _assetNameController.clear();
+        _assetIdController.clear();
+        _locationController.clear();
+        _notesController.clear();
+        setState(() {
+          _selectedCategory = 'Electronics';
+          _selectedStatus = 'Active';
+          _selectedDate = DateTime.now();
+        });
+      } catch (e) {
+        // Check if widget is still mounted
+        if (!mounted) return;
+
+        // Hide loading indicator
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Error saving asset: $e'),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
     }
   }
 
